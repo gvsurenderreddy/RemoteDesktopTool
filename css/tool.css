@@ -1,0 +1,96 @@
+body {
+  background:url('grid.png');
+  overflow:hidden;
+  margin-top:-2px;
+  position:relative;
+}
+
+#TC, #IP {
+  display:none;
+}
+
+.btn-block {
+  margin-bottom:10px;
+  text-align:left;
+  padding:8px 0 8px 13px;
+}
+
+.email-btn {
+  margin:-4px 10px!important;
+  color:#777;
+}
+  
+h2 {
+  color:#555;
+  margin-bottom:0!important;
+}
+
+input[disabled].btn:hover, input[disabled].btn:active, input[disabled].btn:focus{
+  color:white;
+}
+
+table {
+  margin-bottom:20px!important; 
+}
+  
+th {
+  border-right:1px solid #888;
+  width:105px;
+}
+
+th, td {
+  padding:8.2px!important;
+  font-size:13px!important;
+  border-top-width:0!important;
+  border-bottom-width:0!important;
+}
+
+ul {
+  white-space: nowrap;
+  /*border-top:#777 solid 1px!important;*/
+}
+
+.nav li {
+  display: inline-block!important;
+  text-align:center;
+}
+
+li a {
+  color:#555!important;
+}
+
+input, a, button {
+  outline:0!important;
+}
+
+a:hover, a:focus {
+  color:#555!important;
+}
+
+.navbar {
+  background:#fff;
+}
+
+.xclose {
+  position:absolute;
+  right:15px;
+  top:18px;
+}
+
+#IP .dropdown-menu {
+  min-width:50px!important;
+  margin:3px 0 0 10px;
+}
+
+.dropdown-menu .divider {
+  margin:0!important;
+}
+
+.power {
+  width:100%;
+}
+
+.dropup .dropdown-menu li { 
+  display: inline-block!important;
+  text-align:center;
+}

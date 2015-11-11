@@ -1,0 +1,525 @@
+<?xml version="1.0"?>
+<?component debug="true" error="true"?>
+<!--
+  PMPMgr.wsc 1.5
+  Written by Bill Stewart (bill.stewart@frenchmortuary.com)
+
+  Windows Script Component (WSC) class for managing per-machine
+  network printer connections. Per-machine printers are network
+  printer connections that appear in the Printers window for all users
+  of a computer.
+
+  Properties:
+
+  ComputerName [write only]
+    Defines the computer name used when calling the GetPrinters,
+    ExistPrinter, AddPrinter, and DeletePrinter methods. The default
+    is the local computer. A blank string or a single dot (.) are
+    alternate ways of specifying the local computer.
+
+  Methods:
+
+  GetPrinters
+    Returns an array of per-machine network printer connections
+    installed on the computer specified by the ComputerName property.
+
+  ExistPrinter(PrinterName)
+    Returns true if the specified per-machine network printer
+    connection exists on the computer specified by the ComputerName
+    property, or false otherwise. Specify the printer name in UNC
+    format (\\servername\printername).
+
+  AddPrinter(PrinterName)
+    Adds the specified per-machine network printer connection to the
+    computer specified by the ComputerName property. Specify the
+    printer name in UNC format (\\servername\printername). Returns
+    true if the per-machine network printer connection doesn't exist
+    on the computer, or false if it exists (i.e., you can't add a
+    printer that already exists).
+
+    Note: The AddPrinter method does not verify that the specified
+    printer actually exists, so make sure to specify it correctly. If
+    the specified printer doesn't exist, it will be added to the
+    Printers window, but it will be non-functional. To delete it, use
+    the DeletePrinter method.
+
+    Tip: Use the GetSharedPrinters method (below) to retrieve a list
+    of valid printers from a print server.
+
+  DeletePrinter(PrinterName)
+    Deletes the specified per-machine network printer connection from
+    the computer specified by the ComputerName property. Specify the
+    printer name in UNC format (\\servername\printername). Returns
+    true if the per-machine network printer connection exists on the
+    computer, or false if it doesn't exist (i.e., you can't delete a
+    printer that doesn't exist).
+
+  GetSharedPrinters(ComputerName)
+    Returns an array of shared printers on the specified computer. Use
+    this method to enumerate the shared printers on a print server.
+
+  Notes:
+
+  All of the methods except for GetSharedPrinters attempt to verify
+  connectivity to the spooler service. If the component can't connect
+  to a remote computer or if the spooler service isn't running, the
+  component will raise an error.
+
+  Per-machine printer connections on a computer are retrieved with the
+  following command line:
+
+  rundll32 printui.dll,PrintUIEntry /c\\<computer> /ge /f<tempfile>
+
+  This command enumerates the per-machine printer connections on the
+  specified computer and saves it to the specified temporary UNICODE
+  text file. The component then opens the file and uses a regular
+  expression pattern to retrieve each printer's name. The GetPrinters
+  method returns this list as a VB array.
+
+  To add or delete a per-machine printer connection, the component
+  uses the following command line:
+
+  rundll32 printui.dll,PrintUIEntry /c\\<computer> {/ga | /gd}
+    /n\\<servername>\<printername>
+
+  The /ga option adds printers, and the /gd option deletes them.
+
+  Internally, the component uses the full paths to the rundll32.exe
+  and printui.dll files to avoid problems if the Path setting is
+  incorrect or corrupt. (This is surprisingly common.)
+
+  The account executing the AddPrinter and DeletePrinter methods must
+  be a member of the local Administrators group on the computer
+  specified by the ComputerName property. There is no way to hide the
+  "Printer User Interface" dialog box that appears when the AddPrinter
+  or DeletePrinter methods are executed by an account with
+  insufficient permissions.
+
+  The AddPrinter and DeletePrinter methods use a regular expression
+  pattern to verify if the printer name is a UNC path. If the printer
+  name isn't a UNC path, the component will raise an error.
+
+  If a user is logged on to the computer and you add or delete per-
+  machine network printer connections, the changes will not be
+  reflected in the Printers window until the current user logs off or
+  the spooler service is restarted.
+
+  Version history:
+
+  1.5 (15 August 2006)
+  * Setting the ComputerName property now always empties the
+    g_printers array, even if the computer name did not change. This
+    allows a calling program to set the computer name, even if it's
+    the same computer name, and get an updated array of the computer's
+    per-machine printers.
+  * The component now uses WMI instead of ADSI to verify that the
+    Spooler service is running. This is so that a local non-
+    administrator user can successfully connect to the local WMI
+    service. (ADSI returns an error for non-administrators when
+    reading a service's state, even on the local computer.)
+  * Changed the Service object: Instead of a Status method, the
+    service's status is available by reading the object's status
+    property. (The Service object's status property is simply a copy
+    of the WMI Win32_Service object's Status property.)
+  * The component no longer verifies that that spooler is running
+    before attempting to retrieve shared printers from a print server.
+    (It will still raise an error if it can't connect to the print
+    server.) I made this change so that it's not necessary to be a
+    member of the print server's local administrators group to
+    retrieve its list of shared printers.
+  * You can now be a member of Administrators on the local computer
+    and add printers from a print server without having to be a member
+    of Administrators on the print server. In the previous version,
+    you had to be a member of Administrators on both the local
+    computer and the print server.
+
+  1.0 (03 March 2006)
+  * Initial version.
+-->
+
+<component id="PMPMgr">
+  <registration
+    description="PMPMgr.wsc: Manages per-machine printers"
+    progid="Penton.PMPMgr"
+    version="1.5"
+    classid="{DEB04939-C581-4342-8CBC-6553434C3226}"
+  />
+  <resource id="progid">Penton.PMPMgr</resource>
+
+  <public>
+    <property name="ComputerName">
+      <put/>
+    </property>
+    <method name="GetPrinters"/>
+    <method name="ExistPrinter">
+      <parameter name="PrinterName"/>
+    </method>
+    <method name="AddPrinter">
+      <parameter name="PrinterName"/>
+    </method>
+    <method name="DeletePrinter">
+      <parameter name="PrinterName"/>
+    </method>
+    <method name="GetSharedPrinters">
+      <parameter name="ComputerName"/>
+    </method>
+  </public>
+
+<script language="JScript"><![CDATA[
+var SYSTEM_FOLDER = 1,
+  TEMP_FOLDER = 2,
+  ERROR_BAD_PATHNAME = 161,
+  ERROR_SERVICE_NOT_ACTIVE = 1062,
+  UNC_RE_PATTERN = "\\\\{2}[^\\\\]+\\\\{1}[^\\\\]{1}.*";
+
+// Adds an exists method to the Array object. It iterates the array
+// and returns true if the item exists, or false if it doesn't. The
+// match is not case-sensitive.
+Array.prototype.exists = function(item)
+{
+  var n;
+
+  for (n = 0; n < this.length; n++)
+    if (this[n].toLowerCase() == item.toLowerCase())
+      return true;
+
+  return false;
+}
+
+// Adds a toVBArray method to the Array object. It creates a
+// Dictionary object, populates it with the members of the JScript
+// array, and uses its Keys method to return a VBArray.
+Array.prototype.toVBArray = function()
+{
+  var dict, n;
+
+  dict = new ActiveXObject("Scripting.Dictionary");
+
+  for (n = 0; n < this.length; n++)
+    dict.Add(this[n], "");
+
+  return dict.Keys();
+}
+
+// Adds the trim method to the String object; it uses a regular
+// expression to remove the leading and trailing spaces from the
+// string.
+String.prototype.trim = function()
+{
+    return this.replace(/(^\s*)|(\s*$)/g, "");
+}
+
+// This is the constructor function for the Win32Error object. The
+// function's parameter is an error number. If it's an automation
+// error (i.e., it's less than zero), then the function adds 2^32
+// (0x100000000) to convert it to a positive number, shifts off the
+// left 16 bits (the automation error part), and shifts it right 16
+// bits to obtain only the Win32 error code. The object's number
+// property contains the error code, and the description property
+// contains the Win32 error description.
+function Win32Error(ErrorCode)
+{
+  var ERROR_BAD_NETPATH = 53;
+  var errno;
+
+  if (ErrorCode < 0)
+    errno = ((ErrorCode + 0x100000000) << 16) >> 16;
+  else
+    errno = ErrorCode;
+
+  this.number = ErrorCode;
+  this.description = "";
+
+  // This makes it easy to add additional error codes.
+  switch (errno) {
+    case ERROR_BAD_NETPATH: {
+      this.description = "The network path was not found";
+      break;
+    }
+    default: {
+      this.description = "Unknown error";
+    }
+  }
+}
+
+// This is the constructor for the Service object. It tries to connect
+// to a service on a computer. If it fails, the err property will
+// contain the error number, and the errdesc property will contain the
+// error description. The state property is a string containing the
+// service's current state (e.g., "Stopped", "Running", etc.).
+function Service(ComputerName, ServiceName)
+{
+  this.err = 0;
+  this.errdesc = "";
+  this.state = null;
+
+  var service;
+
+  if (ComputerName == null)
+    ComputerName = ".";
+
+  try {
+    service = GetObject("winmgmts:{impersonationlevel=impersonate}!//"
+      + ComputerName + "/root/cimv2").Get("Win32_Service.Name="
+      + "\"" + ServiceName + "\"");
+    this.state = service.State;
+  }
+  catch(err) {
+    this.err = err.number;
+    this.errdesc = err.description;
+  }
+}
+
+// Define the global variables.
+var g_fso, g_wshnetwork, g_wshshell;
+var g_computername, g_printers, g_rundll;
+
+// Instantiate the global objects.
+g_fso = new ActiveXObject("Scripting.FileSystemObject");
+g_wshnetwork = new ActiveXObject("WScript.Network");
+g_wshshell = new ActiveXObject("WScript.Shell");
+
+// Set the initial global variable values.
+g_computername = g_wshnetwork.ComputerName;
+g_printers = new Array();
+
+// Build the rundll32 command using full pathnames, in case the path
+// setting is broken (this is more common than you might think).
+g_rundll = g_fso.BuildPath(g_fso.GetSpecialFolder(SYSTEM_FOLDER), "rundll32.exe")
+  + " " + g_fso.BuildPath(g_fso.GetSpecialFolder(SYSTEM_FOLDER), "printui.dll")
+  + ",PrintUIEntry";
+
+// Case-insensitive sort function. It copies the function's arguments
+// (arg1 and arg2) into local variables before calling toLowerCase in
+// order to work around a JScript bug. See the following Usenet thread
+// for more information:
+// http://groups.google.com/group/microsoft.public.scripting.jscript/browse_frm/thread/12e9a3be6b650c88
+// The bug still exists (even in Windows XP SP2, tested here).
+function SortIgnoreCase(arg1, arg2)
+{
+  var a = arg1.toLowerCase(), b = arg2.toLowerCase();
+  return (b < a) - (a < b);
+}
+
+// Returns a nicely formed computer name (uppercase and without
+// leading backslashes). If the computer name is blank or a single
+// dot (.), returns the current computer's name.
+function FormatComputerName(ComputerName)
+{
+  ComputerName = ComputerName.trim().toUpperCase();
+  if (ComputerName.substr(0, 2) == "\\\\")
+    ComputerName = ComputerName.substr(2).trim();
+  if ((ComputerName == "") || (ComputerName == "."))
+    ComputerName = g_wshnetwork.ComputerName;
+  return ComputerName;
+}
+
+// Sets the object's ComputerName property.
+function put_ComputerName(ComputerName)
+{
+  ComputerName = FormatComputerName(ComputerName);
+  g_printers.length = 0;
+  g_computername = ComputerName;
+}
+
+// Throws an error if the specified computer is not reachable or if
+// its spooler service is not running.
+function VerifySpooler(ComputerName)
+{
+  var spooler;
+
+  // Create a Service object.
+  spooler = new Service(ComputerName, "spooler");
+
+  // Throw an error if the Service object contains an error.
+  if (spooler.err != 0)
+    throw new Error(spooler.err, spooler.errdesc);
+
+  // Throw an error if the spooler service isn't running.
+  if (spooler.state != "Running")
+    throw new Error(ERROR_SERVICE_NOT_ACTIVE, "The Spooler service"
+      + " is not running on " + ComputerName);
+}
+
+// Populates the array of printers.
+function BuildPrintersArray()
+{
+  var cmdline, tempfile, ts, re, n, line;
+
+  // Throw an error if we can't contact the computer or if its spooler
+  // service isn't running.
+  VerifySpooler(g_computername);
+
+  // Create a temporary filename.
+  do
+    tempfile = g_fso.BuildPath(g_fso.GetSpecialFolder(TEMP_FOLDER),
+      g_fso.GetTempName());
+  while (g_fso.FileExists(tempfile));
+
+  // Construct the rundll32 command.
+  cmdline = g_rundll + " /c\"\\\\" + g_computername + "\""
+    + " /ge /f\"" + tempfile + "\"";
+
+  // Execute the rundll32 command as a hidden process (0), and wait
+  // for it to complete (true).
+  g_wshshell.Run(cmdline, 0, true);
+
+  // Open the temporary file for reading (1), don't create it if it
+  // doesn't exist (false), and open it as UNICODE (true).
+  ts = g_fso.OpenTextFile(tempfile, 1, false, true);
+
+  // Create the regular expression object. The parentheses delimit the
+  // submatches. The regular expression object's exec method returns
+  // an array, and the second element in the returned array (i.e.,
+  // array[1]) contains the match.
+  re = new RegExp("^Printer Name: (" + UNC_RE_PATTERN + ")$", "i");
+
+  n = 0;
+  while (! ts.AtEndOfStream) {
+    line = ts.ReadLine();
+    if (re.test(line)) {
+      g_printers[n] = re.exec(line)[1];
+      n++;
+    }
+  }
+
+  // Close and delete the temporary file.
+  ts.Close();
+  g_fso.DeleteFile(tempfile);
+
+  // Sort the array of printers, ignoring case.
+  g_printers.sort(SortIgnoreCase);
+}
+
+// Returns the array of per-machine printers.
+function GetPrinters()
+{
+  BuildPrintersArray();
+  return g_printers.toVBArray();
+}
+
+// Returns true if the specified per-machine printer exists.
+function ExistPrinter(PrinterName)
+{
+  BuildPrintersArray();
+  return g_printers.exists(PrinterName);
+}
+
+// Throws an error if the specified path is not a UNC path.
+function VerifyUNCPath(Path)
+{
+  var re;
+
+  re = new RegExp("^" + UNC_RE_PATTERN + "$");
+  if (! re.test(Path))
+    throw new Error(ERROR_BAD_PATHNAME, "The specified path is invalid");
+}
+
+// Adds the specified printer to the computer as a per-machine
+// printer. Returns true if the specified printer doesn't exist.
+function AddPrinter(PrinterName)
+{
+  var exists, cmdline;
+
+  // Throw an error if we can't contact the computer or if its spooler
+  // service isn't running.
+  VerifySpooler(g_computername);
+  // Throw an error if the printer name isn't a valid UNC path.
+  VerifyUNCPath(PrinterName);
+
+  exists = ExistPrinter(PrinterName);
+  if (! exists) {
+    cmdline = g_rundll + " /c\"\\\\" + g_computername + "\" /ga"
+      + " /n\"" + PrinterName + "\"";
+    g_wshshell.Run(cmdline, 0, true);
+  }
+
+  return ! exists;
+}
+
+// Deletes the specified per-machine printer from the computer.
+// Returns true if the specified printer exists.
+function DeletePrinter(PrinterName)
+{
+  var exists, cmdline;
+
+  // Throw an error if we can't contact the computer or if its spooler
+  // service isn't running.
+  VerifySpooler(g_computername);
+  // Throw an error if the printer name isn't a valid UNC path.
+  VerifyUNCPath(PrinterName);
+
+  exists = ExistPrinter(PrinterName);
+  if (exists) {
+    cmdline = g_rundll + " /c\"\\\\" + g_computername + "\" /gd"
+      + " /n\"" + PrinterName + "\"";
+    g_wshshell.Run(cmdline, 0, true);
+  }
+
+  return exists;
+}
+
+// Returns an array of printers shared from the specified print
+// server.
+function GetSharedPrinters(ComputerName)
+{
+  var computer, w32err, queues, printers, n;
+
+  // Retrive a nicely formed computer name.
+  ComputerName = FormatComputerName(ComputerName);
+
+  // Throw an error if we can't connect to the computer with ADSI.
+  try {
+    computer = GetObject("WinNT://" + ComputerName + ",Computer");
+  }
+  catch(err) {
+    // If the description property of the Error object is blank,
+    // then create a Win32Error object to interpret the error. I
+    // implemented this primarily because because ADSI doesn't
+    // populate the Error object's description property for error
+    // 0x80070035 (i.e., error 0x35 or 53, ERROR_BAD_NETPATH).
+    if (err.description == "") {
+      w32err = new Win32Error(err.number);
+      throw new Error(w32err.number, w32err.description);
+    }
+    else
+      throw new Error(err.number, err.description);
+  }
+
+  // Specify that we only want to see PrintQueue objects by setting
+  // the computer object's Filter property (this requires a VBArray).
+  computer.Filter = new Array("PrintQueue").toVBArray();
+
+  // Create the Enumerator object so we can iterate the collection.
+  queues = new Enumerator(computer);
+
+  // Create an empty array of printers to populate.
+  printers = new Array();
+  n = 0;
+
+  // If we're not enumerating PrintQueue objects on the local
+  // computer, then simply add them to the array as-is. If we are
+  // enumerating the PrintQueue objects on the local computer, then we
+  // need to add \\computername\ before each printer name.
+  if (ComputerName != g_wshnetwork.ComputerName) {
+    for (; ! queues.atEnd(); queues.moveNext()) {
+      printers[n] = queues.item().PrinterName;
+      n++;
+    }
+  }
+  else {
+    for (; ! queues.atEnd(); queues.moveNext()) {
+      printers[n] = "\\\\" + ComputerName + "\\" + queues.item().PrinterName;
+      n++;
+    }
+  }
+
+  // Sort the array of printers, ignoring case.
+  printers.sort(SortIgnoreCase);
+
+  // Return the array of printers as a VBArray.
+  return printers.toVBArray();
+}
+]]>
+</script>
+</component>

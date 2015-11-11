@@ -1,0 +1,117 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<!--
+  VerifyService.hta: Verifies that a service is running
+  Written by Bill Stewart (bill.stewart@frenchmortuary.com)
+
+  PMPMgr.hta opens this application via the window.showModalDialog
+  method, and it passes an object reference that's available via the
+  window.dialogArguments property.
+
+  The object referenced by the dialogArguments variable has the
+  following properties:
+
+  computerName - The computer name on which to verify the service
+  serviceName - The service's name (e.g., "Spooler")
+  err - 0 if the connection succeeded, non-zero on failure
+  errdesc - the textual description of the error
+  state - the service's state (e.g., "Stopped", "Running", etc.)
+
+  This application uses WMI to connect to the specified computer and
+  retrieve the state of the specified service and updates the
+  properties of the object referred to by the dialogArguments
+  variable.
+
+  The onload event for the body element executes the startProcess
+  function, which schedules the verifyService function. This is
+  necessary to let the script "yield" long enough to display the
+  dialog's contents.
+
+  The verifyService function automatically closes the window when it
+  finishes executing.
+
+  Version history:
+
+  1.0 (15 August 2006)
+  * Initial version.
+-->
+<head>
+<hta:application id="htainfo"
+  applicationname="VerifyService.hta"
+  version="1.0"
+  border="dialog"
+  caption="no"
+  contextmenu="no"
+  maximizebutton="no"
+  selection="no"
+  scroll="no"
+  showintaskbar="no"
+/hta:application>
+<title>Please Wait</title>
+<style type="text/css">
+body {
+  background-color: menu;
+  font-family: sans-serif;
+  font-size: smaller;
+  height: 100%;
+}
+#content {
+  height: 100%;
+  width: 100%;
+  vertical-align: center;
+}
+</style>
+<script language="JavaScript">
+var args = window.dialogArguments;
+var computerName, serviceName;
+
+function verifyService()
+{
+  try {
+    var wmi = GetObject("winmgmts:{impersonationlevel=impersonate}"
+      + "!//" + computerName + "/root/cimv2");
+    var service = wmi.Get("Win32_Service.Name=\""
+      + serviceName + "\"");
+    args.err = 0;
+    args.errdesc = "";
+    args.state = service.state;
+  }
+  catch(err) {
+    args.err = err.number;
+    args.errdesc = err.description;
+    args.state = null;
+  }
+  window.close();
+}
+
+function startProcess()
+{
+  // Prevent user from running this HTA stand-alone.
+  if (typeof args == "undefined") {
+    window.resizeTo(0, 0);
+    window.moveTo(screen.width / 2, screen.height / 2);
+    var wshshell = new ActiveXObject("WScript.Shell");
+    wshshell.Popup("This application doesn't run stand-alone. "
+      + "It is called by PMPMgr.hta.", 0, htainfo.applicationName, 48);
+    window.close();
+  }
+  else {
+    computerName = args.computerName;
+    serviceName = args.serviceName;
+    document.title = "Please Wait";
+    info.innerHTML = "Verifying " + serviceName + " service on "
+      + computerName + "...";
+    window.setTimeout("verifyService();", 1);
+  }
+}
+</script>
+</head>
+<body onload="startProcess();">
+<table border="0" cellpadding="0" cellspacing="0" id="content">
+  <tr>
+    <td style="text-align: center;"><span id="info"></span></td>
+  </tr>
+</table>
+</body>
+</html>

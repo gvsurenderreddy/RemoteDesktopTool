@@ -1,0 +1,566 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<!--
+  PMPMgr.hta: HTML application for managing per-machine printers
+  Written by Bill Stewart (bill.stewart@frenchmortuary.com)
+
+  This application requires PMPMgr.wsc version 1.5 or later. You must
+  register PMPMgr.wsc on the computer before running this application.
+
+  This application also requires GetPrinters.hta and
+  VerifyService.hta. These files should reside in the same directory
+  as PMPMgr.hta.
+
+  The PMPMgr.wsc component provides a script interface to add and
+  delete per-machine printers, and this application provides a GUI
+  front-end for the component.
+
+  Version history:
+
+  1.0 (15 August 2006)
+  * Initial version.
+-->
+<!--
+  border="dialog"
+  scroll="no"
+-->
+<head>
+<hta:application id="htainfo"
+  applicationname="Per-Machine Printer Manager"
+  version="1.0"
+  border="dialog"
+  caption="yes"
+  contextmenu="no"
+  maximizebutton="no"
+  scroll="no"
+  selection="no"
+/hta:application>
+<title>Per-Machine Printer Manager</title>
+<style type="text/css">
+body {
+  background-color: menu;
+  font-family: sans-serif;
+  font-size: smaller;
+}
+h1 {
+  font-size: 16pt;
+  margin: 0 0 6pt 0;
+  text-align: center;
+}
+p {
+  margin: 6pt 0 6pt 0;
+}
+input.btn {
+  width: 90px;
+}
+table.list {
+  margin: 6px 0 0 2px;
+  vertical-align: top;
+}
+td {
+  vertical-align: center;
+}
+</style>
+<script language="JavaScript">
+var MODAL_DLG_HEIGHT = "75px", MODAL_DLG_WIDTH = "400px";
+
+var computer = "", printserver = "";
+var pmprinters = new Array(), sharedprinters = new Array();
+var pmpmgr = new ActiveXObject("Penton.PMPMgr");
+
+// Workalike to VBScript's Hex function.
+function hex(n)
+{
+  if (n >= 0)
+    return n.toString(0x10).toUpperCase();
+  else
+    return (n + 0x100000000).toString(0x10).toUpperCase();
+}
+
+// Update the HTML content and print server button state.
+function updateContent(mode)
+{
+  switch(mode) {
+    case "add": {
+      currentcomputer.value = computer;
+      preposition.innerHTML = "to:"
+      printerlbl.innerHTML = "Shared printers to add"
+        + " to " + computer + ":";
+      serverbtn.style.display = "";
+      clearbtn.style.display = "";
+      break;
+    }
+    case "delete": {
+      currentcomputer.value = computer;
+      preposition.innerHTML = "from:"
+      printerlbl.innerHTML = "Per-machine printers to delete"
+        + " from " + computer + ":";
+      serverbtn.style.display = "none";
+      clearbtn.style.display = "none";
+      break;
+    }
+  }
+}
+
+// Return the current mode ("add" or "delete").
+function getMode()
+{
+  return(mode.value);
+}
+
+// This is the constructor function for the serviceObject object. This
+// object provides an interface between this application and
+// VerifyService.hta.
+function serviceObject()
+{
+  this.computerName = "";
+  this.serviceName = "";
+  this.err = -1;
+  this.errdesc = "";
+  this.state = null;
+}
+
+// This function creates a serviceObject object (above) and passes
+// it as an argument to the window.showModalDialog method, which opens
+// VerifyService.hta as a modal dialog. VerifyService.hta returns its
+// results via the serviceObject object's properties.
+function checkSpooler(computerName)
+{
+  var serviceobj = new serviceObject(), result;
+
+  serviceobj.computerName = computerName;
+  serviceobj.serviceName = "Spooler";
+
+  window.showModalDialog("VerifyService.hta", serviceobj,
+    "dialogHeight:" + MODAL_DLG_HEIGHT + "; dialogWidth:"
+    + MODAL_DLG_WIDTH + "; help:no");
+
+  result = serviceobj.err == 0;
+
+  if (! result) {
+    alert("Error 0x" + hex(serviceobj.err) + " connecting to "
+      + computerName + ": " + serviceobj.errdesc);
+  }
+
+  if (result) {
+    result = serviceobj.state == "Running";
+    if (! result)
+      alert("The Spooler service is not running on "
+        + computerName + ".");
+  }
+  return result;
+}
+
+// This is the constructor function for the computerObject object.
+// The computerObject object functions as an interface between this
+// application and the GetPrinters.hta window opened via the
+// window.showModalDialog method. The pmpmgr property is a reference
+// to the Penton.PMPMgr object. If the printServer property is true,
+// then the computerName property contains the name of a print server,
+// and GetPrinters.hta should set the printers property to an array of
+// shared printers on the print server. If the printServer property is
+// false, then GetPrinters.hta should return an array of per-machine
+// printers on the specified computer.
+function computerObject()
+{
+  this.pmpmgr = pmpmgr;
+  this.printServer = false;
+  this.computerName = "";
+  this.printers = new Array();
+  this.err = -1;
+  this.errdesc = null;
+}
+
+// Populate the pmprinters array with the current computer's list of
+// per-machine printers. This function passes a computerObject object
+// (above) as a parameter to the window.showModalDialog method.
+// GetPrinters.hta modifies the computerObject object's properties to
+// return its results.
+function getPMPrinters()
+{
+  pmprinters.length = 0;
+  var computerobj = new computerObject();
+
+  computerobj.computerName = computer;
+  computerobj.printServer = false;
+  window.showModalDialog("GetPrinters.hta", computerobj,
+    "dialogHeight:" + MODAL_DLG_HEIGHT + ";"
+    + " dialogWidth:" + MODAL_DLG_WIDTH + "; help:no");
+
+  if (computerobj.err != 0)
+    alert("Error 0x" + hex(computerobj.err) + " connecting to "
+      + computerobj.computerName + ": " + computerobj.errdesc);
+  else
+    pmprinters = computerobj.printers;
+}
+
+// Clear the printers list.
+function clearPrinters()
+{
+  var opts = printers.options;
+
+  // Iterate the array backwards since the length property changes
+  // after each call to the remove method.
+  for (var n = opts.length - 1; n >= 0; n--)
+    opts.remove(n);
+  clearbtn.disabled = true;
+  applybtn.disabled = true;
+}
+
+// Add a printer name to the list.
+function addPrinter(printerName)
+{
+  var opt = document.createElement("option");
+  opt.text = printerName;
+  printers.options.add(opt);
+}
+
+// Returns true if the specified array item exists in the named array,
+// ignoring case.
+function existsInArray(arrayName, arrayItem)
+{
+  for (var n = 0; n < arrayName.length; n++)
+    if (arrayName[n].toLowerCase() == arrayItem.toLowerCase())
+      return true;
+
+  return false;
+}
+
+// Populate the printers list with the current array of shared
+// printers, or alert the user if there are no print shares. This
+// function passes a computerObject object as a parameter to the
+// window.showModalDialog method. GetPrinters.hta modifies the
+// computerObject object's properties to return its results.
+function populateSharedPrinters()
+{
+  var result = true;
+
+  if (printserver != "") {
+    if (sharedprinters.length == 0) {
+      var computerobj = new computerObject();
+      computerobj.printServer = true;
+      computerobj.computerName = printserver;
+      window.showModalDialog("GetPrinters.hta",
+        computerobj, "dialogHeight:" + MODAL_DLG_HEIGHT + ";"
+        + " dialogWidth:" + MODAL_DLG_WIDTH + "; help:no");
+      if (computerobj.err != 0) {
+        alert("Error 0x" + hex(computerobj.err) + " connecting to "
+          + computerobj.computerName + ": " + computerobj.errdesc);
+        result = false;
+      }
+      else {
+        sharedprinters = computerobj.printers;
+        if (sharedprinters.length == 0) {
+          alert("There are no shared printers on " + printserver + ".");
+          result = false;
+        }
+      }
+    }
+
+    if (result) {
+      clearPrinters();
+      for (var n = 0; n < sharedprinters.length; n++)
+        if (! existsInArray(pmprinters, sharedprinters[n]))
+          addPrinter(sharedprinters[n]);
+      if (printers.options.length > 0)
+        clearbtn.disabled = false;
+      else {
+        alert("All available shared printers from " + printserver
+          + " are installed on " + computer + ".");
+        result = false;
+      }
+    }
+
+    if (! result)
+      printserver = "";
+  }
+}
+
+// Populate the printers list with the current computer's per-machine
+// printers. Alerts the user if the current computer dosn't have any
+// per-machine printers installed on it.
+function populatePMPrinters()
+{
+  if (pmprinters.length > 0) {
+    for (var n = 0; n < pmprinters.length; n++)
+      addPrinter(pmprinters[n]);
+  }
+  else {
+    alert("There are no per-machine printers installed on "
+      + computer + ".");
+  }
+}
+
+// Set the operating mode ("add" or "delete").
+function setMode(mode)
+{
+  clearPrinters();
+  updateContent(mode);
+  switch (mode) {
+    case "add": {
+      populateSharedPrinters();
+      break;
+    }
+    case "delete": {
+      populatePMPrinters();
+      break;
+    }
+  }
+}
+
+// Enables the Apply button if an item is selected in the list; if
+// no items are selected, the apply button is disabled.
+function setApply()
+{
+  var opts = printers.options;
+  var applyenabled = false;
+
+  for (var n = 0; n < opts.length; n++) {
+    applyenabled = opts[n].selected;
+    if (applyenabled)
+      break;
+  }
+
+  applybtn.disabled = ! applyenabled;
+}
+
+// Cleans up the HTML content.
+function cleanupContent()
+{
+  printserver = "";
+  sharedprinters.length = 0;
+
+  clearPrinters();
+  getPMPrinters();
+  updateContent(getMode());
+
+  if (getMode() == "delete")
+    populatePMPrinters();
+}
+
+// Return str without leading or trailing spaces. If str is null,
+// return a blank string.
+function trim(str)
+{
+  if (str == null)
+    return "";
+  else
+    return str.replace(/(^\s*)|(\s*$)/g, "");
+}
+
+// Prompts the user for a computer name.
+function getComputer()
+{
+  var userinput = computer;
+
+  userinput = trim(prompt("Enter a computer name.", userinput));
+
+  if ((userinput == "") ||
+    (userinput.toLowerCase() == computer.toLowerCase()))
+    return false;
+
+  // If the computer name is different, the printers list contains
+  // a list of shared printers, and the current mode is "add", prompt
+  // the user to clear the list of shared printers.
+  if ((userinput.toLowerCase() != computer.toLowerCase())
+    && printers.options.length > 0)
+    if (getMode() == "add") {
+      if (! confirm("Changing computers clears the list of shared"
+        + " printers. Continue?"))
+      return false;
+    }
+
+  if (! checkSpooler(userinput))
+    return false;
+
+  computer = userinput;
+
+  // Clean up the HTML content.
+  cleanupContent();
+
+  return true;
+}
+
+// Prompt the user for a print server name.
+function getServer()
+{
+  var userinput = printserver;
+
+  userinput = trim(prompt("Enter a print server name.", userinput));
+
+  if (userinput == "")
+    return false;
+
+  // If the print server name hasn't changed, don't do anything.
+  if (userinput.toLowerCase() == printserver.toLowerCase())
+    return false;
+
+  // Update the print server name with the user input.
+  printserver = userinput;
+
+  // Clear the shared printer array.
+  sharedprinters.length = 0;
+
+  // Clear the list of shared printers.
+  // clearPrinters();
+
+  // Populate the list with the shared printers.
+  populateSharedPrinters();
+
+  return true;
+}
+
+// Prompt the user to clear the list of shared printers.
+function clearList()
+{
+  if (! confirm("Clear the list of shared printers?"))
+    return false;
+  printserver = "";
+  sharedprinters.length = 0;
+  clearPrinters();
+}
+
+// Prompt the user to apply the selected changes.
+function applyChanges()
+{
+  var mode = getMode(), response = false;
+
+  switch (mode) {
+    case "add": {
+      response = confirm("Add the selected per-machine printer(s)"
+        + " to " + computer + "?")
+      break;
+    }
+    case "delete": {
+      response = confirm("Delete the selected per-machine printer(s)"
+        + " from " + computer + "?")
+      break;
+    }
+  }
+
+  if (! response)
+    return false;
+
+  var opts = printers.options;
+
+  // Iterate the list of printers. If a printer is selected, add
+  // or delete it, depending on the current mode.
+  for (var n = 0; n < opts.length; n++)
+    if (opts[n].selected)
+      if (mode == "add")
+        pmpmgr.AddPrinter(opts[n].text);
+      else
+        pmpmgr.DeletePrinter(opts[n].text);
+
+  // Clean up the HTML content.
+  cleanupContent();
+  return true;
+}
+
+// This function verifies that a file exists in the same directory
+// as this application.
+function verifyAuxApp(appName)
+{
+  var fso = new ActiveXObject("Scripting.FileSystemObject");
+  var appdir = fso.GetParentFolderName(location.pathname);
+  // Use unescape in case the path contains spaces
+  var fullpath = unescape(fso.BuildPath(appdir, appName));
+  var result = fso.FileExists(fullpath);
+  if (! result)
+    alert("Fatal error: Can't find " + appName + ".");
+  return result;
+}
+
+// Initializes the application.
+function initializeApplication()
+{
+  var appwidth = 498, appheight = 449;
+  // Resize the application window. Unfortunately, we can't
+  // define the application's window dimensions at design time.
+  window.resizeTo(appwidth, appheight);
+
+  // Center the application's window on the screen.
+  window.moveTo((screen.width - appwidth) / 2,
+    (screen.height - appheight) / 2);
+
+  // Verifies that the associated applications exist in the same
+  // directory.
+  if (! verifyAuxApp("GetPrinters.hta"))
+    window.close();
+  if (! verifyAuxApp("VerifyService.hta"))
+    window.close();
+}
+</script>
+</head>
+<body>
+<h1>Per-Machine Printer Manager</h1>
+
+<table border="0" cellpadding="0" cellspacing="0" style="width: 100%;">
+  <tr style="padding-left: 3px; text-align: left;">
+    <td>
+      <select id="mode" onchange="setMode(this.value);">
+        <option value="add">Add</option>
+        <option value="delete">Delete</option>
+      </select>
+    </td>
+    <td>
+      per-machine printers
+    </td>
+    <td style="width: 30px;">
+      <span id="preposition"></span>
+    </td>
+    <td>
+      <input type="text" id="currentcomputer" value=""
+        readonly="readonly" style="background-color: menu;" />
+    </td>
+    <td>
+      <input type="button" class="btn" value="Change..."
+      onclick="getComputer();" />
+    </td>
+  </tr>
+</table>
+
+<table border="0" cellpadding="0" cellspacing="0" class="list">
+  <tr>
+    <td style="text-align: left;">
+      <span id="printerlbl">&nbsp;</span>
+    </td>
+    <td>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <select id="printers" size="17" multiple="multiple"
+      onchange="setApply();" style="width: 372px;">
+      </select>
+    </td>
+    <td style="padding-left: 3px; vertical-align: top; width: 90px;">
+      <input type="button" id="serverbtn" class="btn"
+      onclick="getServer();" value="Print Server..." />
+      <p><input type="button" id="clearbtn" class="btn"
+      onclick="clearList();" value="Clear List..."
+      disabled="disabled" /></p>
+    </td>
+  </tr>
+</table>
+
+<p style="text-align: right;">
+  <input type="button" id="applybtn" class="btn" value="Apply..."
+  onclick="applyChanges();" disabled="disabled" />
+  <input type="button" class="btn" value="Close"
+  onclick="window.close();" style="padding-left: 3px;" />
+</p>
+
+<script language="JavaScript">
+initializeApplication();
+computer = new ActiveXObject("WScript.Network").ComputerName.toLowerCase();
+if (! checkSpooler(computer)) {
+  alert("You must start the Print Spooler service to use this application.");
+  window.close();
+}
+getPMPrinters();
+updateContent("add");
+</script>
+</body>
+</html>

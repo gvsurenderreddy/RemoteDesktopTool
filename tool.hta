@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+
+<html> 
+  <head> 
+    <meta charset="utf-9">
+    <meta http-equiv="X-UA-Compatible" content="IE=8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+	<title>Desktop Remote Support Tool - v4</title> 
+    
+    <!--  HTA  -->
+    <HTA:APPLICATION 
+      ID="objRemoteTool" 
+      APPLICATIONNAME="RemoteTool" 
+      SINGLEINSTANCE="no" 
+      SHOWINTASKBAR="yes" 
+      CAPTION="yes" 
+      ICON=".\components\remotetool.ico"
+      CONTEXTMENU="no" 
+      VERSION="4"  
+      BORDER="thick"                     
+      CONTEXTMENU="yes"
+      INNERBORDER="no"
+      MAXIMIZEBUTTON="yes"
+      MINIMIZEBUTTON="yes">
+      
+    <!--  Stylesheets  -->
+    <link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
+    <link rel="stylesheet" type="text/css" href="css/tool.css">
+    
+    <script language="VBScript" src="tool.vbs" type="text/VBScript"></script>
+      
+    <script src="js/jquery.min.js" type="text/javascript"></script>
+    <script src="js/bootstrap.min.js" type="text/javascript"></script>
+  </head>
+    
+  <body>
+    <div class="container" id="Main">
+<!--  <div onmousedown="VBScript:Call setPos()" onmousemove="VBScript:Call moving()" onmouseup="VBScript:Call stopMoving()">-->
+      <div>  
+        <h2>Desktop Remote Support Tool</h2>
+        <input class="btn xclose btn-default" type="button" value="X Close" onClick="VBScript:Call closeHTA()">
+      </div>
+      <div class="clearfix"></div><br>
+      <div class="row">
+        <div class="col-xs-3">
+          <div id="poop"></div>
+          <button type="button" class="btn btn-primary btn-block" onClick='RDP'>
+            <span class="glyphicon glyphicon-user"></span> Remote Desktop
+          </button>
+          <button type="button" class="btn btn-primary btn-block" onClick='SCCM'>
+            <span class="glyphicon glyphicon-modal-window"></span> SCCM
+          </button>
+          <button type="button" class="btn btn-primary btn-block" onClick='RA'>
+            <span class="glyphicon glyphicon-modal-window"></span> Remote Assistance
+          </button>
+          <button type="button" class="btn btn-info btn-block" onClick='SysInfo'>
+            <span class="glyphicon glyphicon-cog"></span> System Info
+          </button>
+          <button type="button" class="btn btn-info btn-block" onClick='RemoteMMC'>
+            <span class="glyphicon glyphicon-blackboard"></span> Manage
+          </button>
+          <button type="button" class="btn btn-warning btn-block" onClick='BrowseC'>
+            <span class="glyphicon glyphicon-folder-open"></span> Browse C:
+          </button>
+          <button type="button" class="btn btn-warning btn-block" onClick='DelProf'>
+            <span class="glyphicon glyphicon-erase"></span> Delete Profiles
+          </button>
+          <span class="btn-group dropup power">
+            <button type="button" class="btn btn-danger btn-block" data-toggle="dropdown">
+              <span class='glyphicon glyphicon-off'></span> Power
+            </button>              
+            <ul class="dropdown-menu">
+              <li><a href="#" onclick="Power 'Logoff', 4">Force Logoff</a></li>
+              <li><a href="#" onclick="Power 'Reboot', 6">Force Reboot</a></li>
+              <li><a href="#" onclick="Power 'Shutdown', 5">Force Shutdown</a></li>
+            </ul>
+          </span>
+        </div>
+        <div class="col-xs-9">
+          <div class="input-group">
+            <input type="text" class="form-control" id="deviceInput">
+            <span class="input-group-btn" id="load">
+              <button class='btn btn-danger' onClick='PingDevice'>LOAD DEVICE</button>
+            </span>
+          </div>
+          <div id="DT">
+            <table class="table">
+              <tr><th>Device ID:</th>  <td><b><span id=deviceid></span></b></td></tr> 
+              <tr><th>User:</th>       <td><b><span id=userid></span></b></td></tr>
+              <tr><th>IP Address:</th> 
+                <td id="IP">
+                  <b><span id=ipaddress></span></b>
+                  <span class="btn-group">
+                    <button type="button" class="btn btn-default email-btn btn-xs" data-toggle="dropdown">
+                      <span class='glyphicon glyphicon-cog'></span> tools
+                    </button>              
+                    <ul class="dropdown-menu">
+                      <li><a href="#" onclick="IPconfigAll">IP Config</a></li><li class="divider"></li>
+                      <li><a href="#" onclick="RenewIP">Renew IP</a></li><li class="divider"></li>
+                      <li><a href="#" onclick="FlushDNS">Flush DNS</a></li><li class="divider"></li>
+                      <li><a href="#" onclick="ContinuousPing">Cont. Ping</a></li>
+                    </ul>
+                  </span>
+                </td>
+              </tr>
+              <tr><th>MAC:</th>        <td>   <span id=macaddress></span></td></tr> 
+              <tr><th>Ram:</th>        <td>   <span id=ram></span></td></tr>
+              <tr><th>Dell Model:</th> <td>   <span id=model></span> <span id=servicetag></span></td></tr>
+              <tr><th>OS Version:</th> <td>   <span id=os></span></td></tr>
+              <tr><th>Machine OU:</th> <td>   <span id=ou></span></td></tr>
+              <tr><th>Boot Date:</th>  <td>   <span id=bootdate></span></td></tr>
+              <tr><th>Image Date:</th> <td>   <span id=imagedate></span></td></tr>
+            </table>            
+          </div>
+          <table class="table" id="TC">
+            <br/>
+            <h4>Not able to read info on this device. This might be a Thin Client</h4>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="navbar navbar-default navbar-fixed-bottom">
+      <div class="container-fluid">
+        <div>
+          <ul class="nav navbar-nav">
+            <li>
+              <a href="http://ohmcweba.ohmc.org/printermap/default.aspx">
+                <span class="glyphicon glyphicon-print"></span> Printer Mapping
+              </a>
+            </li>
+            <li>
+              <a href="https://ohmcreports.ohmc.org/Reports/Pages/Report.aspx?ItemPath=%2fCST+Reports%2fBadge+Number+Lookup+-+Employee">
+                <span class="glyphicon glyphicon-credit-card"></span> Badge Lookup
+              </a>
+            </li>
+            <li>
+              <a href="https://overview/admin/">
+                <span class="glyphicon glyphicon-cog"></span> VMware View Admin
+              </a>
+            </li>
+            <li><a href="#" onClick='WDMserver'><span class="glyphicon glyphicon-list-alt"></span> WDM Server</a></li>
+            <li>
+              <a href="http://www.rubbermaidhealthcare.com/Pages/request-service.aspx">
+                <span class="glyphicon glyphicon-file"></span> Rubbermaid Request
+              </a>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </body> 
+</html>

@@ -1,0 +1,113 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+  "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<!--
+  GetPrinters.hta: Gets a list of printers from a remote computer
+  Written by Bill Stewart (bill.stewart@frenchmortuary.com)
+
+  PMPMgr.hta opens this application using the window.showModalDialog
+  method and passes an object as a parameter (available via the
+  window.dialogArguments property). If the object's printServer
+  property is true, then the computerName property is the name of a
+  print server, and this application populates the object's printers
+  property with an array of printers shared from the print server
+  named in the computerName property. Otherwise, it populates the
+  object's printers property with an array of per-machine printers on
+  the specified computer.
+
+  The onload event for the body element executes the startProcess
+  function, which schedules the getPrinters function. This is
+  necessary to let the script "yield" long enough to allow the
+  dialog's contents to appear.
+
+  The getPrinters function automatically closes the window when it's
+  finished executing.
+
+  Version history:
+
+  1.0 (15 August 2006)
+  * Initial version.
+-->
+<head>
+<hta:application id="htainfo"
+  applicationname="GetPrinters.hta"
+  version="1.0"
+  border="dialog"
+  caption="no"
+  contextmenu="no"
+  maximizebutton="no"
+  selection="no"
+  scroll="no"
+  showintaskbar="no"
+/hta:application>
+<title>Please Wait</title>
+<style type="text/css">
+body {
+  background-color: menu;
+  font-family: sans-serif;
+  font-size: smaller;
+  height: 100%;
+}
+#content {
+  height: 100%;
+  width: 100%;
+  vertical-align: center;
+}
+</style>
+<script language="JavaScript">
+var args = window.dialogArguments;
+
+function getPrinters()
+{
+  // If the printServer property is true, call the Penton.PMPMgr
+  // object's GetSharedPrinters method (which returns a VBArray),
+  // convert it to an Array, and return it via the printers property.
+  try {
+    if (args.printServer) {
+       args.printers = args.pmpmgr.GetSharedPrinters(args.computerName).toArray();
+    }
+    else {
+      // Otherwise, set the Penton.PMPMgr object's ComputerName
+      // property, call its GetPrinters method (which returns a
+      // VBArray), convert it to an Array, and return it via the
+      // printers property.
+      args.pmpmgr.ComputerName = args.computerName;
+      args.printers = args.pmpmgr.GetPrinters().toArray();
+    }
+    args.err = 0;
+  }
+  catch(err) {
+    args.err = err.number;
+    args.errdesc = err.description;
+  }
+
+  window.close();
+}
+
+function startProcess()
+{
+  // Prevent user from running this HTA stand-alone.
+  if (typeof args == "undefined") {
+    window.resizeTo(0, 0);
+    window.moveTo(screen.width / 2, screen.height / 2);
+    var wshshell = new ActiveXObject("WScript.Shell");
+    wshshell.Popup("This application doesn't run stand-alone. "
+      + "It is called by PMPMgr.hta.", 0, htainfo.applicationName, 48);
+    window.close();
+  }
+  else {
+    info.innerHTML = "Retrieving printers from "
+      + args.computerName + "...";
+    window.setTimeout("getPrinters();", 1);
+  }
+}
+</script>
+</head>
+<body onload="startProcess();">
+<table border="0" cellpadding="0" cellspacing="0" id="content">
+  <tr>
+    <td style="text-align: center;"><span id="info"></span></td>
+  </tr>
+</table>
+</body>
+</html>
