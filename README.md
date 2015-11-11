@@ -7,4 +7,6 @@ It's an HTA(HTML Application) that uses:
 * Bootstrap 3 for UI
 * Various components for other stuff
 
-![Alt text](screenshots/tool.png?raw=true "Remote Tool")
+![Alt text](screenshots/1.png?raw=true "Remote Tool")
+![Alt text](screenshots/2.png?raw=true "Remote Tool")
+![Alt text](screenshots/3.png?raw=true "Remote Tool")
